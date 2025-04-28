@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama RAG UI</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <!-- Toastr CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 50px;
+        }
+        .card {
+            border-radius: 12px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        #chat-history {
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+        .chat-entry {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-query {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .ai-response {
+            background-color: #e9ecef;
+            padding: 12px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+        .loading-dots span {
+            font-size: 20px;
+            display: inline-block;
+            animation: dots 1.5s infinite;
+        }
+        .loading-dots span:nth-child(1) { animation-delay: 0s; }
+        .loading-dots span:nth-child(2) { animation-delay: 0.3s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.6s; }
+
+        @keyframes dots {
+            0% { opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+
+        .img-thumbnail {
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            max-height: 150px;
+            object-fit: cover;
+        }
+        
+        .chat-input-wrapper {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ced4da;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            background-color: #fff;
+        }
+    
+        .attachment-preview {
+            display: flex;
+            align-items: start;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+    
+        .attachment-thumbnail {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            max-width: 80%;
+            overflow: hidden;
+        }
+    
+        .attachment-thumbnail img {
+            height: 40px;
+            width: auto;
+            border-radius: 0.25rem;
+            object-fit: cover;
+        }
+    
+        .remove-preview-btn {
+            background: none;
+            border: none;
+            font-size: 1rem;
+            color: #888;
+            cursor: pointer;
+        }
+    
+        .query-textarea {
+            border: none;
+            resize: none;
+            overflow-y: auto;
+            min-height: 38px;
+            max-height: 150px;
+            outline: none;
+            width: 100%;
+        }
+    
+        .input-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+    
+        .input-actions .left-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .attachment-preview {
+            margin-bottom: 0.5rem;
+        }
+    
+        #fileIconPreview {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+    
+        #fileIconPreview img {
+            height: 60px;
+            width: 60px;
+            border-radius: 12px;
+            object-fit: cover;
+        }
+    
+        .remove-preview-btn-style {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background-color: white;
+            border: 2px solid #ccc;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 16px;
+            line-height: 16px;
+            color: black;
+            text-align: center;
+            padding: 0;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    
+        .remove-preview-btn-style:hover {
+            background-color: #f0f0f0;
+        }
+
+        .pdf-preview-container {
+            display: flex;
+            align-items: center;
+            background-color: #b6b5b5;
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            position: relative;
+            max-width: 300px;
+        }
+    
+        .pdf-icon {
+            background-color: #6c757d; /* gray or use #007bff for blue */
+            height: 40px;
+            width: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+        }        
+
+        .pdf-details .pdf-name {
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    
+        .pdf-details .pdf-type {
+            font-size: 12px;
+        }
+    
+        .remove-preview-btn-style {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background-color: white;
+            border: 2px solid #ccc;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            line-height: 12px;
+            color: black;
+            text-align: center;
+            padding: 0;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    
+        .remove-preview-btn-style:hover {
+            background-color: #f0f0f0;
+        }
+
+        #imageModal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        #imageModal img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.15);
+        }
+        
+    #imageModalClose {
+        position: absolute;
+        top: 30px;
+        right: 40px;
+        font-size: 2rem;
+        color: white;
+        cursor: pointer;
+    }
+
+    .chat-entry {
+        margin-bottom: 20px;
+        padding: 10px;
+    }
+
+    .user-query {
+        background-color: #007bff;
+        color: white;
+        display: inline-block;
+        padding: 8px 12px;
+        border-radius: 15px;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+
+    .ai-response {
+        background-color: #f1f1f1;
+        color: black;
+        display: inline-block;
+        padding: 8px 12px;
+        border-radius: 15px;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card p-4">
+            <h3 class="text-center">OLLAMA RAG 🤖 — Ask. Retrieve. Learn.</h3>
+    
+            <!-- Knowledge Source Display -->
+            <div class="alert alert-info text-center" id="knowledgeSource">
+                <strong>📚 Knowledge Source:</strong> <span id="knowledgeText">Fetching knowledge...</span>
+            </div>
+    
+            <!-- Chat History Section -->
+            <div id="chat-history" class="mt-3">
+                <h5>📝 Chat History</h5>
+                <div id="chatContent">
+                    <p class="text-muted">Chat history will appear here...</p>
+                </div>
+            </div>
+    
+            <!-- Query Form -->
+            <form id="queryForm" class="mt-3" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="chat-input-wrapper">
+
+                    <!-- File Preview (Image or PDF) -->
+                    <div id="filePreview" class="attachment-preview" style="display: none; position: relative; width: fit-content;">
+                        <div id="fileIconPreview" class="position-relative"></div>
+                        <!-- Remove Button -->
+                        <button type="button" class="remove-preview-btn-style" id="removeFileBtn" aria-label="Remove">&times;</button>
+                    </div>
+
+                    <!-- Expandable Input -->
+                    <textarea id="query" name="query" class="query-textarea" rows="1" placeholder="Ask anything..." ></textarea>
+
+                    <!-- Actions -->
+                    <div class="input-actions">
+                        <div class="left-actions">
+                            <input type="file" id="pdf_file" name="pdf_file" accept=".pdf,image/*" style="display: none;">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="uploadBtn" title="Attach file">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Image Modal - NOW inside body -->
+    <div id="imageModal" style="display: none;">
+        <span id="imageModalClose">&times;</span>
+        <img id="modalImage" src="" alt="Zoomed Image">
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Toastr JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+    <script>
+        const pdfInput = document.getElementById('pdf_file');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const filePreview = document.getElementById('filePreview');
+        const fileIconPreview = document.getElementById('fileIconPreview');
+        const removeFileBtn = document.getElementById('removeFileBtn');
+        const textarea = document.getElementById('query');
+
+        uploadBtn.addEventListener('click', () => {
+            pdfInput.click();
+        });
+
+        pdfInput.addEventListener('change', () => {
+            if (pdfInput.files.length > 0) {
+                const file = pdfInput.files[0];
+                const fileType = file.type;
+                const fileName = file.name.toLowerCase();
+                fileIconPreview.innerHTML = '';
+
+                // 📄 If file is PDF
+                if (fileName.endsWith('.pdf')) {
+                    fileIconPreview.innerHTML = `
+                        <div class="pdf-preview-container">
+                            <div class="pdf-icon">
+                                <i class="fas fa-file fa-lg text-white"></i>
+                            </div>
+                            <div class="pdf-details">
+                                <div class="pdf-name fw-bold text-white">${file.name}</div>
+                                <div class="pdf-type text-muted small">PDF File</div>
+                            </div>
+                        </div>
+                    `;
+                    filePreview.style.display = 'flex';
+                }
+                // 🖼️ If file is an image
+                else if (fileType.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function (e) {
+                        fileIconPreview.innerHTML = `
+                            <div style="position: relative;">
+                                <img src="${e.target.result}" alt="Image Preview" style="height: 60px; width: 60px; border-radius: 12px; object-fit: cover;">
+                            </div>
+                        `;
+                        filePreview.style.display = 'flex';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+
+        removeFileBtn.addEventListener('click', () => {
+            pdfInput.value = '';
+            fileIconPreview.innerHTML = '';
+            filePreview.style.display = 'none';
+        });
+
+        // ✨ Auto-expand textarea
+        textarea.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+    
+        $(document).ready(function () {
+            function getCSRFToken() {
+                return $("input[name=csrfmiddlewaretoken]").val();
+            }
+    
+            function scrollChatToBottom() {
+                const chat = $("#chat-history")[0];
+                chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
+            }
+    
+            function formatResponse(response) {
+                response = response.replace(/\n{2,}/g, "<br><br>").replace(/\n/g, "<br>");
+                response = response.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+                response = response.replace(/_(.*?)_/g, "<em>$1</em>");
+                response = response.replace(/`([^`]+)`/g, "<code>$1</code>");
+                response = response.replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>");
+                response = response.replace(/(?:^|\n)(\d+)\.\s(.*?)(?=\n|$)/g, "<li>$1. $2</li>");
+                response = response.replace(/(<li>\d+\..*?<\/li>)+/g, "<ol>$&</ol>");
+                response = response.replace(/(?:^|\n)([-•*])\s(.*?)(?=\n|$)/g, "<li>$2</li>");
+                response = response.replace(/(<li>.*?<\/li>)+/g, "<ul>$&</ul>");
+                return response;
+            }
+    
+            // Load current knowledge and chat history initially
+            fetchCurrentKnowledge();
+            fetchChatHistory();
+    
+            function fetchCurrentKnowledge() {
+                $.get("/current_knowledge/", function (data) {
+                    $("#knowledgeText").text(data.current_knowledge.split('/').pop());
+                });
+            }
+    
+            function fetchChatHistory() {
+                $.get("/get_chat_history/", function(data) {
+                    $("#chatContent").empty();
+            
+                    const reversedChat = data.chat_history.reverse();
+            
+                    reversedChat.forEach(function(chat) {
+                        let userInputHtml = "";
+            
+                        if (chat.image) {
+                            // 🖼️ Image uploaded
+                            userInputHtml = `
+                                <div class="d-flex flex-column align-items-end">
+                                    <img src="/media/${chat.image}" class="img-thumbnail mb-2" style="max-height: 200px; border-radius: 8px; object-fit: cover;">
+                                    ${chat.query ? `<p class="user-query mt-2">🧑‍💻 ${chat.query}</p>` : ""}
+                                </div>
+                            `;
+                        } 
+                        else if (chat.pdf_file_name) {
+                            // 📄 PDF uploaded
+                            userInputHtml = `
+                                <div class="d-flex flex-column align-items-end">
+                                    <div class="pdf-preview-container mb-2">
+                                        <div class="pdf-icon">
+                                            <i class="fas fa-file fa-lg text-white"></i>
+                                        </div>
+                                        <div class="pdf-details">
+                                            <div class="pdf-name fw-bold text-white">${chat.pdf_file_name}</div>
+                                            <div class="pdf-type text-muted small">PDF File</div>
+                                        </div>
+                                    </div>
+                                    ${chat.query ? `<p class="user-query mt-2">🧑‍💻 ${chat.query}</p>` : ""}
+                                </div>
+                            `;
+                        }
+                        else if (chat.query) {
+                            // 📝 Text-only query
+                            userInputHtml = `
+                                <div class="text-end">
+                                    <p class="user-query">🧑‍💻 ${chat.query}</p>
+                                </div>
+                            `;
+                        }
+            
+                        const responseHtml = `
+                            <div class="text-start mt-2">
+                                <div class="ai-response">${formatResponse(chat.response)}</div>
+                            </div>
+                        `;
+            
+                        $("#chatContent").append(`
+                            <div class="chat-entry">
+                                ${userInputHtml}
+                                ${responseHtml}
+                            </div>
+                        `);
+                    });
+            
+                    scrollChatToBottom();
+                });
+            }
+            
+            
+            // Handle PDF/Image Upload
+            $("#uploadForm").submit(function(event){
+                event.preventDefault();
+                var formData = new FormData();
+                formData.append("pdf_file", $("#pdf_file")[0].files[0]);
+                formData.append("csrfmiddlewaretoken", getCSRFToken());
+
+                $.ajax({
+                    type: "POST",
+                    url: "/upload/",
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function(response) {
+                        const updatedHtml = `
+                            <div class="chat-entry">
+                                <div class="text-end">
+                                    ${query ? `<p class="user-query">🧑‍💻 You: ${query}</p>` : ""}
+                                    ${isImage ? `<img src="/media/${response.image_path}" class="img-thumbnail mb-2" style="max-height: 200px; border-radius: 8px; object-fit: cover;">` : ""}
+                                    ${isPDF ? `
+                                    <div class="pdf-preview-container">
+                                        <div class="pdf-icon">
+                                            <i class="fas fa-file fa-lg text-white"></i>
+                                        </div>
+                                        <div class="pdf-details">
+                                            <div class="pdf-name fw-bold text-white">${response.filename}</div>
+                                            <div class="pdf-type text-muted small">PDF File</div>
+                                        </div>
+                                    </div>` : ""}
+                                </div>
+                                <div class="text-start">
+                                    <div class="ai-response">${formatResponse(response.extracted_text || response.response)}</div>
+                                </div>
+                            </div>
+                        `;
+                    
+                        $("#uploadEntry").replaceWith(updatedHtml);
+                        scrollChatToBottom();
+                        fetchChatHistory();
+                        fetchCurrentKnowledge();
+                        toastr.success("✅ Uploaded and analyzed!");
+                    },                    
+                    error: function() {
+                        toastr.error("❌ Upload failed.");
+                    }
+                });
+            });
+
+    
+            // Handle form submit (both for text only, and file + text)
+            $("#queryForm").submit(function (event) {
+                event.preventDefault();
+                const query = $("#query").val();
+                const fileInput = $("#pdf_file")[0];
+                const file = fileInput.files[0];
+            
+                if (file) {
+                    const formData = new FormData();
+                    formData.append("pdf_file", file);
+                    formData.append("query", query);
+                    formData.append("csrfmiddlewaretoken", getCSRFToken());
+            
+                    const isImage = file.type.startsWith("image/");
+                    const fileURL = URL.createObjectURL(file);
+                    const fileName = file.name;
+            
+                    // Clear UI immediately
+                    $("#pdf_file").val("");
+                    $("#filePreview").hide();
+                    $("#fileIconPreview").html("");
+                    $("#query").val("").trigger("input");
+            
+                    let rightContent = "";
+                    if (isImage) {
+                        rightContent = `
+                            <div class="d-flex flex-column align-items-end">
+                                <img src="${fileURL}" class="img-thumbnail mb-2" style="max-height: 200px; border-radius: 8px; object-fit: cover;">
+                                ${query ? `<p class="user-query mt-2">🧑‍💻 ${query}</p>` : ""}
+                            </div>
+                        `;
+                    } else if (file.type === "application/pdf") {
+                        rightContent = `
+                            <div class="d-flex flex-column align-items-end">
+                                <div class="pdf-preview-container mb-2">
+                                    <div class="pdf-icon">
+                                        <i class="fas fa-file-pdf fa-lg text-white"></i>
+                                    </div>
+                                    <div class="pdf-details">
+                                        <div class="pdf-name fw-bold text-white">${fileName}</div>
+                                        <div class="pdf-type text-muted small">PDF File</div>
+                                    </div>
+                                </div>
+                                ${query ? `<p class="user-query mt-2">🧑‍💻 ${query}</p>` : ""}
+                            </div>
+                        `;
+                    }
+            
+                    const $entry = $(`
+                        <div class="chat-entry" id="uploadEntry">
+                            ${rightContent}
+                            <div class="text-start mt-2">
+                                <div class="ai-response loading-dots">Analyzing<span>.</span><span>.</span><span>.</span></div>
+                            </div>
+                        </div>
+                    `);
+            
+                    $("#chatContent").append($entry);
+                    scrollChatToBottom();
+            
+                    $.ajax({
+                        type: "POST",
+                        url: "/upload/",
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function (response) {
+                            // Clear the "Analyzing..." first
+                            $("#uploadEntry").remove();
+                        
+                            const isImage = file.type.startsWith("image/");
+                            const fileURL = URL.createObjectURL(file);
+                        
+                            let userSideHtml = "";
+                        
+                            if (isImage) {
+                                // 🖼️ If image
+                                userSideHtml = `
+                                    <div class="text-end">
+                                        ${query ? `<p class="user-query">🧑‍💻 ${query}</p>` : ""}
+                                        <img src="${fileURL}" class="img-thumbnail mb-2" style="max-height: 200px; border-radius: 8px; object-fit: cover;">
+                                    </div>
+                                `;
+                            } else {
+                                // 📄 If PDF
+                                userSideHtml = `
+                                    <div class="d-flex flex-column align-items-end">
+                                        <div class="pdf-preview-container mb-2">
+                                            <div class="pdf-icon">
+                                                <i class="fas fa-file-pdf fa-lg text-white"></i>
+                                            </div>
+                                            <div class="pdf-details">
+                                                <div class="pdf-name fw-bold text-white">${file.name}</div>
+                                                <div class="pdf-type text-muted small">PDF File</div>
+                                            </div>
+                                        </div>
+                                        ${query ? `<p class="user-query mt-2">🧑‍💻 ${query}</p>` : ""}
+                                    </div>
+                                `;
+                            }                            
+                        
+                            const aiResponseHtml = `
+                                <div class="text-start">
+                                    <div class="ai-response">${formatResponse(response.extracted_text || response.response)}</div>
+                                </div>
+                            `;
+                        
+                            // Append properly
+                            $("#chatContent").append(`
+                                <div class="chat-entry">
+                                    ${userSideHtml}
+                                    ${aiResponseHtml}
+                                </div>
+                            `);
+                        
+                            scrollChatToBottom();
+                            toastr.success("✅ AI analyzed the file and query!");
+                            fetchCurrentKnowledge();
+                        },
+                        error: function () {
+                            $("#uploadEntry .ai-response").html(`<span class="text-danger">❌ Failed to analyze.</span>`);
+                            toastr.error("Something went wrong.");
+                        }
+                    });
+            
+                } else {
+                    // Text-only query (no file)
+                    const $entry = $(`
+                        <div class="chat-entry">
+                            <div class="text-end">
+                                <p class="user-query">🧑‍💻 ${query}</p>
+                            </div>
+                            <div class="text-start mt-2">
+                                <div class="ai-response"><span class="loading-dots"><span>.</span><span>.</span><span>.</span></span> Thinking...</div>
+                            </div>
+                        </div>
+                    `);
+                    $("#chatContent").append($entry);
+                    scrollChatToBottom();
+            
+                    $.ajax({
+                        type: "POST",
+                        url: "",
+                        data: { query: query, csrfmiddlewaretoken: getCSRFToken() },
+                        success: function (data) {
+                            const lastResponse = $("#chatContent .ai-response").last();
+                            lastResponse.html(formatResponse(data.response));
+                            scrollChatToBottom();
+                        },
+                        error: function () {
+                            toastr.error("Something went wrong.");
+                        }
+                    });
+            
+                    $("#query").val("").trigger("input");
+                }
+            });
+            
+        });
+    </script>    
+</body>
+</html> 
