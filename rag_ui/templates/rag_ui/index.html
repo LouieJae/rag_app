@@ -461,21 +461,42 @@
                         let userInputHtml = "";
             
                         if (chat.image) {
-                            // 🖼️ Image uploaded
-                            userInputHtml = `
-                                <div class="d-flex flex-column align-items-end">
-                                    <img src="/media/${chat.image}" class="img-thumbnail mb-2" style="max-height: 200px; border-radius: 8px; object-fit: cover;">
-                                    ${chat.query ? `<p class="user-query mt-2">🧑‍💻 ${chat.query}</p>` : ""}
-                                </div>
-                            `;
+                            const fileExtension = chat.image.split('.').pop().toLowerCase();
+                            const isPDF = fileExtension === "pdf";
+            
+                            if (isPDF) {
+                                // 📄 If it's a PDF uploaded
+                                userInputHtml = `
+                                    <div class="d-flex flex-column align-items-end">
+                                        <div class="pdf-preview-container mb-2">
+                                            <div class="pdf-icon">
+                                                <i class="fas fa-file-pdf fa-lg text-white"></i>
+                                            </div>
+                                            <div class="pdf-details">
+                                                <div class="pdf-name fw-bold text-white">${chat.image.split("/").pop()}</div>
+                                                <div class="pdf-type text-muted small">PDF File</div>
+                                            </div>
+                                        </div>
+                                        ${chat.query ? `<p class="user-query mt-2">🧑‍💻 ${chat.query}</p>` : ""}
+                                    </div>
+                                `;
+                            } else {
+                                // 🖼️ If it's an image uploaded
+                                userInputHtml = `
+                                    <div class="d-flex flex-column align-items-end">
+                                        <img src="/media/${chat.image}" class="img-thumbnail mb-2" style="max-height: 200px; border-radius: 8px; object-fit: cover;">
+                                        ${chat.query ? `<p class="user-query mt-2">🧑‍💻 ${chat.query}</p>` : ""}
+                                    </div>
+                                `;
+                            }
                         } 
                         else if (chat.pdf_file_name) {
-                            // 📄 PDF uploaded
+                            // 📄 PDF uploaded through new method
                             userInputHtml = `
                                 <div class="d-flex flex-column align-items-end">
                                     <div class="pdf-preview-container mb-2">
                                         <div class="pdf-icon">
-                                            <i class="fas fa-file fa-lg text-white"></i>
+                                            <i class="fas fa-file-pdf fa-lg text-white"></i>
                                         </div>
                                         <div class="pdf-details">
                                             <div class="pdf-name fw-bold text-white">${chat.pdf_file_name}</div>
@@ -487,13 +508,14 @@
                             `;
                         }
                         else if (chat.query) {
-                            // 📝 Text-only query
+                            // 📝 Text-only query (no upload)
                             userInputHtml = `
                                 <div class="text-end">
                                     <p class="user-query">🧑‍💻 ${chat.query}</p>
                                 </div>
                             `;
                         }
+                        // 🚫 ELSE, no input (rare) — don't display anything for user input
             
                         const responseHtml = `
                             <div class="text-start mt-2">
