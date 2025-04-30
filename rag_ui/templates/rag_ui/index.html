@@ -458,7 +458,7 @@
                     const reversedChat = data.chat_history.reverse();
             
                     reversedChat.forEach(function(chat) {
-                        let userInputHtml = "";
+                        let userInputHtml = "";                    
             
                         if (chat.image) {
                             // 🖼️ Image uploaded
@@ -468,14 +468,14 @@
                                     ${chat.query ? `<p class="user-query mt-2">🧑‍💻 ${chat.query}</p>` : ""}
                                 </div>
                             `;
-                        } 
+                        }
                         else if (chat.pdf_file_name) {
                             // 📄 PDF uploaded
                             userInputHtml = `
                                 <div class="d-flex flex-column align-items-end">
                                     <div class="pdf-preview-container mb-2">
                                         <div class="pdf-icon">
-                                            <i class="fas fa-file fa-lg text-white"></i>
+                                            <i class="fas fa-file-pdf fa-lg text-white"></i>
                                         </div>
                                         <div class="pdf-details">
                                             <div class="pdf-name fw-bold text-white">${chat.pdf_file_name}</div>
@@ -632,22 +632,17 @@
                         success: function (response) {
                             // Clear the "Analyzing..." first
                             $("#uploadEntry").remove();
-                        
-                            const isImage = file.type.startsWith("image/");
-                            const fileURL = URL.createObjectURL(file);
-                        
+
                             let userSideHtml = "";
-                        
+                            
                             if (isImage) {
-                                // 🖼️ If image
                                 userSideHtml = `
-                                    <div class="text-end">
-                                        ${query ? `<p class="user-query">🧑‍💻 ${query}</p>` : ""}
+                                    <div class="d-flex flex-column align-items-end">
                                         <img src="${fileURL}" class="img-thumbnail mb-2" style="max-height: 200px; border-radius: 8px; object-fit: cover;">
+                                        ${query ? `<p class="user-query mt-2">🧑‍💻 ${query}</p>` : ""}
                                     </div>
                                 `;
                             } else {
-                                // 📄 If PDF
                                 userSideHtml = `
                                     <div class="d-flex flex-column align-items-end">
                                         <div class="pdf-preview-container mb-2">
@@ -662,21 +657,20 @@
                                         ${query ? `<p class="user-query mt-2">🧑‍💻 ${query}</p>` : ""}
                                     </div>
                                 `;
-                            }                            
-                        
+                            }
+                            
                             const aiResponseHtml = `
-                                <div class="text-start">
+                                <div class="text-start mt-2">
                                     <div class="ai-response">${formatResponse(response.extracted_text || response.response)}</div>
                                 </div>
                             `;
-                        
-                            // Append properly
+                            
                             $("#chatContent").append(`
                                 <div class="chat-entry">
                                     ${userSideHtml}
                                     ${aiResponseHtml}
                                 </div>
-                            `);
+                            `);                                        
                         
                             scrollChatToBottom();
                             toastr.success("✅ AI analyzed the file and query!");
