@@ -66,3 +66,6 @@ var/
 
 # PyCharm
 .idea/
+
+uploads/
+chroma_db_nccn/

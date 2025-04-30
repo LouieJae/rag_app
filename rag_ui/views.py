@@ -18,32 +18,32 @@ latest_knowledge = "No knowledge uploaded"
 def handle_pdf_upload(request):
     if request.method == "POST" and request.FILES.get("pdf_file"):
         uploaded_file = request.FILES["pdf_file"]
-        query = request.POST.get("query", "") or "No query provided."
+        query = request.POST.get("query", "").strip()
         file_ext = uploaded_file.name.split(".")[-1].lower()
 
         uploaded_instance = UploadedPDF.objects.create(file=uploaded_file)
         file_path = uploaded_instance.file.path
 
-        # If it's a PDF
+        # Auto-prompt fallback
+        if not query:
+            if file_ext == "pdf":
+                query = f"Summarize the key points or contents of this PDF file: {uploaded_file.name}"
+            elif file_ext in ["jpg", "jpeg", "png", "webp"]:
+                query = "Describe this image"
+            else:
+                query = "Analyze this uploaded file"
+
         if file_ext == "pdf":
-            # Step 1: Insert uploaded PDF into Vectorstore
             process_uploaded_pdf(file_path)
-
-            # Step 2: Fetch knowledge
             knowledge_context = get_relevant_context_from_db(query)
-
-            # Step 3: Build prompt
             full_prompt = generate_rag_prompt(query, "", knowledge_context)
-
-            # Step 4: Generate response
             ai_response = generate_answer_with_ollama(full_prompt)
             ai_response = format_paragraph(ai_response)
 
-            # ✅ Step 5: Save properly INCLUDING pdf_file_name
             QueryHistory.objects.create(
-                query=query,
+                query=None,  # ⚠️ Optional: store query or not when auto-generated
                 response=ai_response,
-                pdf_file_name=os.path.basename(uploaded_file.name)  # ✅ save the file name here
+                pdf_file_name=uploaded_file.name
             )
 
             return JsonResponse({
@@ -53,10 +53,10 @@ def handle_pdf_upload(request):
             })
 
         elif file_ext in ["jpg", "jpeg", "png", "webp"]:
-            extracted_text = analyze_image_with_llava(file_path, prompt=query or "Describe this image")
+            extracted_text = analyze_image_with_llava(file_path, prompt=query)
 
             QueryHistory.objects.create(
-                query=query,
+                query=None,
                 response=extracted_text,
                 image=uploaded_instance.file
             )
@@ -72,8 +72,6 @@ def handle_pdf_upload(request):
 
     return JsonResponse({"error": "No file uploaded."}, status=400)
 
-
-
 def get_current_knowledge(request):
     """Fetches the most recent uploaded file and displays only the file name."""
     last_uploaded = UploadedPDF.objects.order_by('-uploaded_at').first()
@@ -87,30 +85,29 @@ def get_current_knowledge(request):
     return JsonResponse({"current_knowledge": current_knowledge})
 
 def process_uploaded_pdf(pdf_path):
-    """Processes uploaded PDF and adds it to the existing Chroma vector database."""
     loaders = [PyPDFLoader(pdf_path)]
     docs = []
-
     for loader in loaders:
         docs.extend(loader.load())
 
-    # Split into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     docs = text_splitter.split_documents(docs)
 
-    # Create embedding function
-    embeddings_function = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={'device': 'mps'})
+    embeddings_function = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2", 
+        model_kwargs={'device': 'mps'}
+    )
 
-    # ⚡ Load existing vectorstore
-    vectorstore = Chroma(persist_directory="./chroma_db_nccn", embedding_function=embeddings_function)
+    # ⚠️ Overwrite the database instead of appending
+    vectorstore = Chroma.from_documents(
+        docs, 
+        embedding=embeddings_function, 
+        persist_directory="./chroma_db_nccn"
+    )
 
-    # 📥 Add new documents
-    vectorstore.add_documents(docs)
-
-    # 💾 Save updates
     vectorstore.persist()
+    print(f"✅ Overwrote Chroma DB with {len(docs)} chunks.")
 
-    print(f"✅ Added {len(docs)} chunks to existing Chroma database.")
 
 
 def rag_query(request):
