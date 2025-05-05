@@ -12,38 +12,39 @@ OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 # 📚 1. New: generate_rag_prompt that accepts query, chat_history, and knowledge
 def generate_rag_prompt(query, chat_context, knowledge_context):
     prompt = f"""
-You are a helpful and informative assistant that answers questions using the information provided in the reference context below.
-Always respond completely, explain complex concepts in a simple and friendly tone, and provide all relevant background information.
-If information from the context is not necessary, you may ignore it.
+        You are a helpful and informative assistant that answers questions using the information provided in the reference context below.
+        Always respond completely, explain complex concepts in a simple and friendly tone, and provide all relevant background information.
+        If information from the context is not necessary, you may ignore it.
 
-Here is the previous conversation:
-{chat_context}
+        Here is the previous conversation:
+        {chat_context}
 
-Here is additional knowledge from documents:
-{knowledge_context}
+        Here is additional knowledge from documents:
+        {knowledge_context}
 
-Now, based on everything above, answer the following question:
-'{query}'
+        Now, based on everything above, answer the following question:
+        '{query}'
 
-Answer:
-"""
+        Answer:
+        """
     return prompt
 
 # 🧠 2. Get relevant context from the Chroma database
-def get_relevant_context_from_db(query):
+def get_relevant_context_from_db(query, db_path):
     context = ""
     embeddings_function = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2", 
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={'device': 'mps'}
     )
     vector_db = Chroma(
-        persist_directory="./chroma_db_nccn", 
+        persist_directory=db_path,
         embedding_function=embeddings_function
     )
     search_results = vector_db.similarity_search(query, k=6)
     for result in search_results:
         context += result.page_content + "\n"
     return context
+
 
 # 🖼️ 3. Analyze uploaded images with LLaVA model
 def analyze_image_with_llava(image_path, prompt="Extract the text from this image"):
@@ -83,7 +84,7 @@ def analyze_image_with_llava(image_path, prompt="Extract the text from this imag
 # 🤖 4. Generate an answer using the Ollama model
 def generate_answer_with_ollama(prompt):
     headers = {"Content-Type": "application/json"}
-    payload = {"model": "qwen2.5-coder:3b", "prompt": prompt}
+    payload = {"model": "llama3", "prompt": prompt}
     
     response = requests.post(OLLAMA_URL, headers=headers, json=payload, stream=True)
     
@@ -104,4 +105,23 @@ def generate_answer_with_ollama(prompt):
 
 # 🧹 5. Small utility: format paragraph nicely
 def format_paragraph(response):
-    return response.replace("\n", " ").strip()
+    return response.strip()  # Preserve \n characters for frontend formatting
+
+from sklearn.metrics.pairwise import cosine_similarity
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
+def is_query_related_to_last(current_query, last_query, threshold=0.65):
+    if not current_query or not last_query:
+        return False
+
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={'device': 'mps'}
+    )
+
+    vectors = embeddings.embed_documents([current_query, last_query])
+    cosine_sim = sum(a * b for a, b in zip(vectors[0], vectors[1])) / (
+        sum(a * a for a in vectors[0])**0.5 * sum(b * b for b in vectors[1])**0.5
+    )
+
+    return cosine_sim > threshold
