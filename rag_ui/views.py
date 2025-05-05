@@ -14,6 +14,7 @@ from langchain_community.document_loaders import PyPDFLoader
 
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 latest_knowledge = "No knowledge uploaded"
+from .ollama import is_query_related_to_last
 
 def handle_pdf_upload(request):
     if request.method == "POST" and request.FILES.get("pdf_file"):
@@ -24,7 +25,7 @@ def handle_pdf_upload(request):
         uploaded_instance = UploadedPDF.objects.create(file=uploaded_file)
         file_path = uploaded_instance.file.path
 
-        # Auto-prompt fallback
+        # Generate default query if none provided
         if not query:
             if file_ext == "pdf":
                 query = f"Summarize the key points or contents of this PDF file: {uploaded_file.name}"
@@ -34,14 +35,19 @@ def handle_pdf_upload(request):
                 query = "Analyze this uploaded file"
 
         if file_ext == "pdf":
+            # Always overwrite DB and use current PDF as context
             process_uploaded_pdf(file_path)
-            knowledge_context = get_relevant_context_from_db(query)
+            db_path = process_uploaded_pdf(file_path)  # ⬅️ Now gets unique path
+
+            # Use new PDF context always
+            knowledge_context = get_relevant_context_from_db(query, db_path)
             full_prompt = generate_rag_prompt(query, "", knowledge_context)
+
             ai_response = generate_answer_with_ollama(full_prompt)
             ai_response = format_paragraph(ai_response)
 
             QueryHistory.objects.create(
-                query=None,  # ⚠️ Optional: store query or not when auto-generated
+                query=query,
                 response=ai_response,
                 pdf_file_name=uploaded_file.name
             )
@@ -56,7 +62,7 @@ def handle_pdf_upload(request):
             extracted_text = analyze_image_with_llava(file_path, prompt=query)
 
             QueryHistory.objects.create(
-                query=None,
+                query=query,
                 response=extracted_text,
                 image=uploaded_instance.file
             )
@@ -67,8 +73,7 @@ def handle_pdf_upload(request):
                 "extracted_text": extracted_text
             })
 
-        else:
-            return JsonResponse({"error": "Unsupported file type."}, status=400)
+        return JsonResponse({"error": "Unsupported file type."}, status=400)
 
     return JsonResponse({"error": "No file uploaded."}, status=400)
 
@@ -84,6 +89,8 @@ def get_current_knowledge(request):
 
     return JsonResponse({"current_knowledge": current_knowledge})
 
+import uuid
+
 def process_uploaded_pdf(pdf_path):
     loaders = [PyPDFLoader(pdf_path)]
     docs = []
@@ -94,54 +101,54 @@ def process_uploaded_pdf(pdf_path):
     docs = text_splitter.split_documents(docs)
 
     embeddings_function = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2", 
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={'device': 'mps'}
     )
 
-    # ⚠️ Overwrite the database instead of appending
+    # 🔑 Create unique folder name for each PDF
+    unique_id = str(uuid.uuid4())
+    persist_dir = f"./chroma_dbs/db_{unique_id}"
+
+    # 🧠 Create vector store for current PDF
     vectorstore = Chroma.from_documents(
-        docs, 
-        embedding=embeddings_function, 
-        persist_directory="./chroma_db_nccn"
+        docs,
+        embedding=embeddings_function,
+        persist_directory=persist_dir
     )
-
     vectorstore.persist()
-    print(f"✅ Overwrote Chroma DB with {len(docs)} chunks.")
 
+    print(f"✅ Vector DB created at: {persist_dir}")
+    return persist_dir  # Return so we can use it later
 
 
 def rag_query(request):
-    """Handles user queries and fetches chat history along with knowledge source."""
     if request.method == "POST":
         query = request.POST.get("query", "").strip()
 
         if query:
-            # 🧠 Retrieve recent chat history (last 100 interactions for context)
-            recent_chats = QueryHistory.objects.order_by('-created_at')[:100].values_list("query", "response")
+            # 🧠 Check similarity with the last PDF-based query
+            last_pdf_entry = QueryHistory.objects.filter(pdf_file_name__isnull=False).order_by('-created_at').first()
+            last_pdf_query = last_pdf_entry.query if last_pdf_entry and last_pdf_entry.query else None
 
-            # 📚 Format chat history
-            chat_context = "\n".join([f"User: {q}\nAI: {r}" for q, r in recent_chats if q and r])
+            is_related = is_query_related_to_last(query, last_pdf_query)
 
-            # 📖 Retrieve relevant knowledge from the vector database
-            knowledge_context = get_relevant_context_from_db(query)
+            if is_related:
+                # Include previous chat and PDF context
+                recent_chats = QueryHistory.objects.order_by('-created_at')[:100].values_list("query", "response")
+                chat_context = "\n".join([f"User: {q}\nAI: {r}" for q, r in recent_chats if q and r])
+                knowledge_context = get_relevant_context_from_db(query)
+                full_prompt = generate_rag_prompt(query, chat_context, knowledge_context)
+            else:
+                # ❌ Skip history and PDF context
+                full_prompt = f"You are a helpful assistant. Answer the following question directly:\n\n{query}\n\nAnswer:"
 
-            # 🧩 Combine chat history + knowledge
-            full_prompt = generate_rag_prompt(query, chat_context, knowledge_context)
-
-            # 🚀 Generate the AI answer using Ollama
+            # Get response
             raw_answer = generate_answer_with_ollama(full_prompt)
-
-            # 📝 Format the AI's answer nicely
             formatted_answer = format_paragraph(raw_answer)
 
-            # 🖊️ Save the new query and answer to QueryHistory
-            QueryHistory.objects.create(
-                query=query,
-                response=formatted_answer
-                # No image here since this is a text query
-            )
+            # Save new chat
+            QueryHistory.objects.create(query=query, response=formatted_answer)
 
-            # 🗂 Fetch updated chat history to display
             chat_history = QueryHistory.objects.order_by('-created_at')[:10].values("query", "response", "image", "created_at")
 
             return JsonResponse({

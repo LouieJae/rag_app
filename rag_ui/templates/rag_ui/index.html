@@ -205,9 +205,8 @@
 
         .pdf-details .pdf-name {
             font-size: 14px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            word-wrap: break-word;
+            white-space: normal;
         }
     
         .pdf-details .pdf-type {
@@ -293,6 +292,30 @@
         max-width: 70%;
         word-wrap: break-word;
     }
+
+    .inline-code {
+        background-color: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+        color: #d63384;
+    }
+    
+    .code-block {
+        background-color: #f0f0f0;
+        padding: 10px;
+        border-radius: 8px;
+        margin-top: 10px;
+        font-family: monospace;
+        overflow-x: auto;
+        white-space: pre-wrap;
+    }
+    
+    ol, ul {
+        padding-left: 20px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }    
     </style>
 </head>
 <body>
@@ -429,17 +452,39 @@
             }
     
             function formatResponse(response) {
-                response = response.replace(/\n{2,}/g, "<br><br>").replace(/\n/g, "<br>");
+                // Escape HTML
+                response = response
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+            
+                // Highlight **bold**, _italic_, and `inline code`
                 response = response.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
                 response = response.replace(/_(.*?)_/g, "<em>$1</em>");
-                response = response.replace(/`([^`]+)`/g, "<code>$1</code>");
-                response = response.replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>");
-                response = response.replace(/(?:^|\n)(\d+)\.\s(.*?)(?=\n|$)/g, "<li>$1. $2</li>");
+                response = response.replace(/`([^`]+)`/g, "<code class='inline-code'>$1</code>");
+            
+                // Format code blocks
+                response = response.replace(/```([\s\S]*?)```/g, "<pre class='code-block'><code>$1</code></pre>");
+            
+                // Ordered lists (1. item)
+                response = response.replace(/(?:^|\n)(\d+)\.\s+(.*?)(?=\n|$)/g, "<li>$1. $2</li>");
                 response = response.replace(/(<li>\d+\..*?<\/li>)+/g, "<ol>$&</ol>");
-                response = response.replace(/(?:^|\n)([-•*])\s(.*?)(?=\n|$)/g, "<li>$2</li>");
+            
+                // Unordered lists (- item or • item)
+                response = response.replace(/(?:^|\n)([-•*])\s+(.*?)(?=\n|$)/g, "<li>$2</li>");
                 response = response.replace(/(<li>.*?<\/li>)+/g, "<ul>$&</ul>");
+            
+                // Line breaks
+                response = response.replace(/\n{2,}/g, "<br><br>").replace(/\n/g, "<br>");
+            
+                // Optional: add emojis before common phrases
+                response = response.replace(/(?<=^|<br>)✅/g, "✅");
+                response = response.replace(/(?<=^|<br>)🔍/g, "🔍");
+                response = response.replace(/(?<=^|<br>)📌/g, "📌");
+                response = response.replace(/(?<=^|<br>)💡/g, "💡");
+            
                 return response;
-            }
+            }           
     
             // Load current knowledge and chat history initially
             fetchCurrentKnowledge();
@@ -715,6 +760,25 @@
                 }
             });
             
+        });
+
+        // 🔍 Show modal when image is clicked
+        $(document).on("click", ".img-thumbnail", function () {
+            const src = $(this).attr("src");
+            $("#modalImage").attr("src", src);
+            $("#imageModal").fadeIn();
+        });
+
+        // ❌ Close modal
+        $("#imageModalClose").on("click", function () {
+            $("#imageModal").fadeOut();
+        });
+
+        // 🧼 Optional: click outside image to close
+        $("#imageModal").on("click", function (e) {
+            if (e.target.id === "imageModal") {
+                $(this).fadeOut();
+            }
         });
     </script>    
 </body>
