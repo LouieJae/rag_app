@@ -12,22 +12,23 @@ OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 # 📚 1. New: generate_rag_prompt that accepts query, chat_history, and knowledge
 def generate_rag_prompt(query, chat_context, knowledge_context):
     prompt = f"""
-        You are a helpful and informative assistant that answers questions using the information provided in the reference context below.
-        Always respond completely, explain complex concepts in a simple and friendly tone, and provide all relevant background information.
-        If information from the context is not necessary, you may ignore it.
+        You are a knowledgeable and friendly assistant. You always:
+        - Respond clearly and concisely
+        - Use **bold** for important terms
+        - Use bullet points (•) or numbered lists where appropriate
+        - Highlight key facts
+        - Maintain a helpful and engaging tone
 
-        Here is the previous conversation:
-        {chat_context}
+        {f"Here is the previous conversation:\n{chat_context}" if chat_context else ""}
+        {f"\nHere is some related knowledge:\n{knowledge_context}" if knowledge_context else ""}
 
-        Here is additional knowledge from documents:
-        {knowledge_context}
+        Now answer the following user question:
+        **{query}**
 
-        Now, based on everything above, answer the following question:
-        '{query}'
-
-        Answer:
+        Respond below with clarity and structure:
         """
     return prompt
+
 
 # 🧠 2. Get relevant context from the Chroma database
 def get_relevant_context_from_db(query, db_path):

@@ -120,42 +120,50 @@ def process_uploaded_pdf(pdf_path):
     print(f"✅ Vector DB created at: {persist_dir}")
     return persist_dir  # Return so we can use it later
 
-
 def rag_query(request):
     if request.method == "POST":
         query = request.POST.get("query", "").strip()
+        if not query:
+            return JsonResponse({"error": "Empty query."}, status=400)
 
-        if query:
-            # 🧠 Check similarity with the last PDF-based query
-            last_pdf_entry = QueryHistory.objects.filter(pdf_file_name__isnull=False).order_by('-created_at').first()
-            last_pdf_query = last_pdf_entry.query if last_pdf_entry and last_pdf_entry.query else None
+        # 🧠 1. Include recent chat context
+        recent_chats = QueryHistory.objects.order_by('-created_at')[:10].values_list("query", "response")
+        chat_context = "\n".join([
+            f"User: {q}\nAI: {r}" for q, r in reversed(recent_chats) if q and r
+        ])
 
-            is_related = is_query_related_to_last(query, last_pdf_query)
+        # 📘 2. Try to retrieve the most recent PDF-based knowledge
+        pdf_knowledge = ""
+        last_pdf_entry = QueryHistory.objects.filter(pdf_file_name__isnull=False).order_by('-created_at').first()
+        if last_pdf_entry:
+            pdf_file = UploadedPDF.objects.filter(file__icontains=last_pdf_entry.pdf_file_name).first()
+            if pdf_file:
+                try:
+                    pdf_file_path = pdf_file.file.path
+                    db_path = process_uploaded_pdf(pdf_file_path)  # Recreate the vector DB for now
+                    pdf_knowledge = get_relevant_context_from_db(query, db_path)
+                except Exception as e:
+                    print(f"⚠️ Failed to rebuild vector DB: {e}")
+                    pdf_knowledge = ""
 
-            if is_related:
-                # Include previous chat and PDF context
-                recent_chats = QueryHistory.objects.order_by('-created_at')[:100].values_list("query", "response")
-                chat_context = "\n".join([f"User: {q}\nAI: {r}" for q, r in recent_chats if q and r])
-                knowledge_context = get_relevant_context_from_db(query)
-                full_prompt = generate_rag_prompt(query, chat_context, knowledge_context)
-            else:
-                # ❌ Skip history and PDF context
-                full_prompt = f"You are a helpful assistant. Answer the following question directly:\n\n{query}\n\nAnswer:"
+        # 🧩 3. Build final prompt with context
+        full_prompt = generate_rag_prompt(query, chat_context, pdf_knowledge)
 
-            # Get response
-            raw_answer = generate_answer_with_ollama(full_prompt)
-            formatted_answer = format_paragraph(raw_answer)
+        # 🤖 4. Generate the answer
+        raw_answer = generate_answer_with_ollama(full_prompt)
+        formatted_answer = format_paragraph(raw_answer)
 
-            # Save new chat
-            QueryHistory.objects.create(query=query, response=formatted_answer)
+        # 💾 5. Save the conversation
+        QueryHistory.objects.create(query=query, response=formatted_answer)
 
-            chat_history = QueryHistory.objects.order_by('-created_at')[:10].values("query", "response", "image", "created_at")
+        # 📜 6. Return updated chat history
+        chat_history = QueryHistory.objects.order_by('-created_at')[:10].values("query", "response", "image", "created_at")
 
-            return JsonResponse({
-                "query": query,
-                "response": formatted_answer,
-                "chat_history": list(chat_history),
-            })
+        return JsonResponse({
+            "query": query,
+            "response": formatted_answer,
+            "chat_history": list(chat_history),
+        })
 
     return render(request, "rag_ui/index.html")
 
